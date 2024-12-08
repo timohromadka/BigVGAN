@@ -1,0 +1,50 @@
+#!/bin/bash
+#SBATCH -J bigvgan_training
+#SBATCH -A NALLAPERUMA-SL3-GPU 
+#SBATCH --nodes=1
+#SBATCH --ntasks=1
+#SBATCH --gres=gpu:1
+#SBATCH --time=12:00:00
+#SBATCH --mail-type=ALL
+#SBATCH --output=exp/bigvgan_22khz_128band_training.out
+#SBATCH -p ampere
+
+# Load environment and activate conda
+. /etc/profile.d/modules.sh
+module purge
+module load rhel8/default-amp
+module load miniconda/3
+
+source ~/.bashrc
+conda init bash
+conda activate bigvgan
+
+# Training configuration
+python_executable="/home/th716/.conda/envs/bigvgan/bin/python"
+program_path="${workspaceFolder}/train.py"
+args="--config configs/bigvgan_22khz_128band.json \
+--input_wavs_dir cache/spotify_sleep_dataset/train \
+--input_test_wavs_dir cache/spotify_sleep_dataset/test \
+--checkpoint_path exp/bigvgan_22khz_128band \
+--list_input_unseen_wavs_dir cache/spotify_sleep_dataset/test \
+--checkpoint_interval 2500 \
+--validation_interval 5000 \
+--skip_seen \
+--nonspeech \
+--debug"
+
+CMD="$python_executable $program_path $args"
+
+# Change to the appropriate directory
+workdir="/home/th716/rds/hpc-work/audio-diffusion"
+cd $workdir
+echo "Changed directory to $(pwd)."
+echo "JobID: $SLURM_JOB_ID"
+echo "Time: $(date)"
+echo "Running on master node: $(hostname)"
+echo "Current directory: $(pwd)"
+
+# Execute command
+echo "Executing command:"
+echo "$CMD"
+eval $CMD
