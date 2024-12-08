@@ -143,38 +143,86 @@ def get_mel_spectrogram(wav, h):
     )
 
 
-def get_dataset_filelist(a):
-    training_files = []
-    validation_files = []
-    list_unseen_validation_files = []
 
-    with open(a.input_training_file, "r", encoding="utf-8") as fi:
-        training_files = [
-            os.path.join(a.input_wavs_dir, x.split("|")[0] + ".wav")
-            for x in fi.read().split("\n")
-            if len(x) > 0
+def get_dataset_filelist(a, skip_transcriptions=False):
+    """
+    Generates filelists for training, validation, and unseen validation datasets.
+    If `skip_transcriptions` is True, the function avoids loading text files and directly scans directories for audio files.
+    
+    Args:
+        a: Argument object with input file paths and directories.
+        skip_transcriptions (bool): Whether to skip loading text files and process directories directly.
+    
+    Returns:
+        Tuple[List[str], List[str], List[List[str]]]: Training files, validation files, and unseen validation files.
+    """
+    if skip_transcriptions:
+        # Directly scan directories for audio files
+        training_files = sorted(
+            [
+                os.path.join(a.input_wavs_dir, f)
+                for f in os.listdir(a.input_wavs_dir)
+                if f.endswith(".wav")
+            ]
+        )
+        validation_files = sorted(
+            [
+                os.path.join(a.input_wavs_dir, f)
+                for f in os.listdir(a.input_wavs_dir)
+                if f.endswith(".wav")
+            ]
+        )
+        list_unseen_validation_files = [
+            sorted(
+                [
+                    os.path.join(unseen_dir, f)
+                    for f in os.listdir(unseen_dir)
+                    if f.endswith(".wav")
+                ]
+            )
+            for unseen_dir in a.list_input_unseen_wavs_dir
         ]
-        print(f"first training file: {training_files[0]}")
 
-    with open(a.input_validation_file, "r", encoding="utf-8") as fi:
-        validation_files = [
-            os.path.join(a.input_wavs_dir, x.split("|")[0] + ".wav")
-            for x in fi.read().split("\n")
-            if len(x) > 0
-        ]
-        print(f"first validation file: {validation_files[0]}")
-
-    for i in range(len(a.list_input_unseen_validation_file)):
-        with open(a.list_input_unseen_validation_file[i], "r", encoding="utf-8") as fi:
-            unseen_validation_files = [
-                os.path.join(a.list_input_unseen_wavs_dir[i], x.split("|")[0] + ".wav")
+        print(f"[INFO] Found {len(training_files)} training files.")
+        print(f"[INFO] Found {len(validation_files)} validation files.")
+        for i, unseen_files in enumerate(list_unseen_validation_files):
+            print(
+                f"[INFO] Found {len(unseen_files)} files in unseen validation set {i}."
+            )
+    else:
+        # Load filelists using text files for transcription datasets
+        with open(a.input_training_file, "r", encoding="utf-8") as fi:
+            training_files = [
+                os.path.join(a.input_wavs_dir, x.split("|")[0] + ".wav")
                 for x in fi.read().split("\n")
                 if len(x) > 0
             ]
-            print(
-                f"first unseen {i}th validation fileset: {unseen_validation_files[0]}"
-            )
-            list_unseen_validation_files.append(unseen_validation_files)
+            print(f"First training file: {training_files[0]}")
+
+        with open(a.input_validation_file, "r", encoding="utf-8") as fi:
+            validation_files = [
+                os.path.join(a.input_wavs_dir, x.split("|")[0] + ".wav")
+                for x in fi.read().split("\n")
+                if len(x) > 0
+            ]
+            print(f"First validation file: {validation_files[0]}")
+
+        list_unseen_validation_files = []
+        for i in range(len(a.list_input_unseen_validation_file)):
+            with open(
+                a.list_input_unseen_validation_file[i], "r", encoding="utf-8"
+            ) as fi:
+                unseen_validation_files = [
+                    os.path.join(
+                        a.list_input_unseen_wavs_dir[i], x.split("|")[0] + ".wav"
+                    )
+                    for x in fi.read().split("\n")
+                    if len(x) > 0
+                ]
+                print(
+                    f"First unseen {i}th validation fileset: {unseen_validation_files[0]}"
+                )
+                list_unseen_validation_files.append(unseen_validation_files)
 
     return training_files, validation_files, list_unseen_validation_files
 

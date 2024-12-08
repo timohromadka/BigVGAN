@@ -169,10 +169,24 @@ def train(rank, a, h):
     unseen_validation_filelist will contain sample filepaths outside the seen training & validation dataset
     Example: trained on LibriTTS, validate on VCTK
     """
-    training_filelist, validation_filelist, list_unseen_validation_filelist = (
-        get_dataset_filelist(a)
-    )
+    if not a.nonspeech:
+        # Load filelists for speech datasets (transcriptions needed)
+        training_filelist, validation_filelist, list_unseen_validation_filelist = (
+            get_dataset_filelist(a)
+        )
+    else:
+        # Load filelists without considering transcription files
+        training_filelist, validation_filelist, list_unseen_validation_filelist = (
+            get_dataset_filelist(a, skip_transcriptions=True)
+        )
+        
+    # take only first n samples if max_samples is set    
+    if a.max_samples:
+        training_filelist = training_filelist[:a.max_samples]
+        validation_filelist = validation_filelist[:a.max_samples]
+        list_unseen_validation_filelist = [file_list[:a.max_samples] for i, file_list in enumerate(list_unseen_validation_filelist)]
 
+    # Define training and validation datasets
     trainset = MelDataset(
         training_filelist,
         h,
@@ -302,7 +316,7 @@ def train(rank, a, h):
             )
 
         with torch.no_grad():
-            print(f"step {steps} {mode} speaker validation...")
+            print(f"step {steps} {mode} validation...")
 
             # Loop over validation set and compute metrics
             for j, batch in enumerate(tqdm(loader)):
@@ -328,7 +342,7 @@ def train(rank, a, h):
 
                 # PESQ calculation. only evaluate PESQ if it's speech signal (nonspeech PESQ will error out)
                 if (
-                    not "nonspeech" in mode
+                    not a.nonspeech or "nonspeech" not in mode
                 ):  # Skips if the name of dataset (in mode string) contains "nonspeech"
 
                     # Resample to 16000 for pesq
@@ -671,8 +685,17 @@ def main():
     parser = argparse.ArgumentParser()
 
     parser.add_argument("--group_name", default=None)
+    
+    parser.add_argument("--max_samples", type=int, default=None, help="If set, will specify the number of max training samples to use rather than the whole dataset.")
+    
+    parser.add_argument(
+        "--nonspeech",
+        action="store_true",
+        help="If set, avoids loading or considering text files with transcribed speech.",
+    )
 
-    parser.add_argument("--input_wavs_dir", default="LibriTTS")
+    parser.add_argument("--input_wavs_dir", default="cache/spotify_sleep_dataset/train")
+    parser.add_argument("--input_test_wavs_dir", default="cache/spotify_sleep_dataset/test")
     parser.add_argument("--input_mels_dir", default="ft_dataset")
     parser.add_argument(
         "--input_training_file", default="tests/LibriTTS/train-full.txt"
@@ -684,7 +707,7 @@ def main():
     parser.add_argument(
         "--list_input_unseen_wavs_dir",
         nargs="+",
-        default=["tests/LibriTTS", "tests/LibriTTS"],
+        default=["cache/spotify_sleep_dataset/test"],
     )
     parser.add_argument(
         "--list_input_unseen_validation_file",
@@ -712,8 +735,7 @@ def main():
 
     parser.add_argument(
         "--debug",
-        default=False,
-        type=bool,
+        action="store_true",
         help="debug mode. skips validation loop throughout training",
     )
     parser.add_argument(
@@ -730,14 +752,12 @@ def main():
     )
     parser.add_argument(
         "--skip_seen",
-        default=False,
-        type=bool,
+        action="store_true",
         help="skip seen dataset. useful for test set inference",
     )
     parser.add_argument(
         "--save_audio",
-        default=False,
-        type=bool,
+        action="store_true",
         help="save audio of test set inference to disk",
     )
 
